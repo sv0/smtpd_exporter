@@ -15,6 +15,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+//go:generate mockery -name Stat
+
 var (
 	debug    = flag.Bool("debug", false, "enable debug")
 	execTime = flag.Int("execTime", 1, "seconds to wait before scraping")
@@ -37,42 +39,16 @@ var metrics = []*Metric{
 	},
 }
 
+// TODO: value (int) to save current value to calculate the new value after daemon restart
 type Metric struct {
-	Name      string
-	Help      string
-	Regex     string
-	Available bool
-	Gauge     prometheus.Gauge
-}
-
-func (m *Metric) create(out string) {
-	if matched, err := regexp.MatchString(m.Regex, out); (err != nil) || !matched {
-		if err != nil {
-			log.WithFields(log.Fields{"metric": m.Name}).Error(err)
-		} else {
-			log.WithFields(
-				log.Fields{"metric": m.Name, "regex": m.Regex},
-			).Info("could not find metric")
-			log.WithFields(
-				log.Fields{"metric": m.Name, "regex": m.Regex, "out": out},
-			).Debug("could not find metric in output")
-		}
-
-		m.Available = false
-
-		return
-	}
-
-	m.Available = true
-	m.Gauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: m.Name,
-			Help: m.Help,
-		},
-	)
+	Name  string
+	Help  string
+	Regex string
+	Gauge prometheus.Gauge
 }
 
 // value extracts the needed value out of the output of the smtpctl command
+// TODO: dont send -1... send a zero for calculating
 func (m *Metric) value(out string) (int, error) {
 	re, err := regexp.Compile(m.Regex)
 	if err != nil {
@@ -95,7 +71,7 @@ func (m *Metric) value(out string) (int, error) {
 	return val, nil
 }
 
-type stat interface {
+type Stat interface {
 	now() (string, error)
 }
 
@@ -113,35 +89,50 @@ func (s smtpctl) now() (string, error) {
 	return string(out), nil
 }
 
-func collect(sleepTime *int, stats stat) {
+func collect(sleepTime *int) {
 	dur := time.Duration(*sleepTime)
+	stats := smtpctl{}
 
 	for {
-		collectValues(stats)
+		err := collectValues(stats)
+		if err != nil {
+			log.Error(err)
+		}
 
 		time.Sleep(dur * time.Second)
 	}
 }
 
-func collectValues(stats stat) {
+func collectValues(stats Stat) error {
 	out, err := stats.now()
 	if err != nil {
-		log.Error(err)
-		return
+		return err
 	}
 
 	for _, m := range metrics {
-		if m.Available {
-			log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("using metric")
+		log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("using metric")
 
-			value, err := m.value(out)
+		value, err := m.value(out)
 
-			if err != nil {
-				log.WithFields(log.Fields{"metric": m}).Error(err)
-			}
-
-			m.Gauge.Set(float64(value))
+		if err != nil {
+			log.WithFields(log.Fields{"metric": m}).Error(err)
 		}
+
+		m.Gauge.Set(float64(value))
+	}
+
+	return nil
+}
+
+func init() {
+	for _, m := range metrics {
+		m.Gauge = prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: m.Name,
+				Help: m.Help,
+			},
+		)
+		prometheus.MustRegister(m.Gauge)
 	}
 }
 
@@ -152,23 +143,7 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	stats := smtpctl{}
-	out, err := stats.now()
-
-	if err != nil {
-		log.Fatal("could not get stats")
-	}
-
-	for _, m := range metrics {
-		m.create(out)
-		log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("created metric")
-
-		if m.Available {
-			prometheus.MustRegister(m.Gauge)
-		}
-	}
-
-	go collect(execTime, stats)
+	go collect(execTime)
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Info(fmt.Sprintf("Beginning to serve on port :%d", *port))
