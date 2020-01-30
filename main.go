@@ -15,6 +15,28 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	debug    = flag.Bool("debug", false, "enable debug")
+	execTime = flag.Int("execTime", 1, "seconds to wait before scraping")
+	port     = flag.Int("port", 8080, "port to listen on")
+)
+
+var metrics = []*Metric{
+	{
+		Name:  "smtpd_delivery_ok",
+		Help:  "Shows how often a delivery was ok.",
+		Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
+	}, {
+		Name:  "smtpd_delivery_permfail",
+		Help:  "Shows how often a delivery permafailed.",
+		Regex: `scheduler\.delivery\.permfail=(?P<number>\d+)`,
+	}, {
+		Name:  "smtd_delivery_tempfail",
+		Help:  "Shows how often a delivery tempfailed.",
+		Regex: `scheduler\.delivery\.tempfail=(?P<number>\d+)`,
+	},
+}
+
 type Metric struct {
 	Name      string
 	Help      string
@@ -73,75 +95,80 @@ func (m *Metric) value(out string) (int, error) {
 	return val, nil
 }
 
-var metrics = []Metric{
-	{
-		Name:  "smtpd_delivery_ok",
-		Help:  "Shows how often a delivery was ok",
-		Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
-	}, {
-		Name:  "smtpd_delivery_permfail",
-		Help:  "Shows how often a delivery permafailed",
-		Regex: `scheduler\.delivery\.permfail=(?P<number>\d+)`,
-	}, {
-		Name:  "smtd_delivery_tempfail",
-		Help:  "Shows how often a delivery tempfailed",
-		Regex: `scheduler\.delivery\.tempfail=(?P<number>\d+)`,
-	},
+type stat interface {
+	now() (string, error)
 }
 
-func StatsNow() string {
+type smtpctl struct{}
+
+func (s smtpctl) now() (string, error) {
 	out, err := exec.Command("smtpctl", "show", "stats").Output()
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		return "", err
 	}
 
 	log.Debug(string(out))
 
-	return string(out)
+	return string(out), nil
 }
 
-// TODO: something for mocking time and StatsNow
-func collect(sleepTime *int) {
+func collect(sleepTime *int, stats stat) {
 	dur := time.Duration(*sleepTime)
 
 	for {
-		out := StatsNow()
+		collectValues(stats)
 
-		for _, m := range metrics {
+		time.Sleep(dur * time.Second)
+	}
+}
+
+func collectValues(stats stat) {
+	out, err := stats.now()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	for _, m := range metrics {
+		if m.Available {
+			log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("using metric")
+
 			value, err := m.value(out)
+
 			if err != nil {
 				log.WithFields(log.Fields{"metric": m}).Error(err)
 			}
 
 			m.Gauge.Set(float64(value))
 		}
-
-		time.Sleep(dur * time.Second)
 	}
 }
 
 func main() {
-	debug := flag.Bool("debug", false, "enable debug")
-	execTime := flag.Int("execTime", 1, "seconds to wait before scraping")
-	port := flag.Int("port", 8080, "port to listen on")
-
 	flag.Parse()
 
 	if *debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	out := StatsNow()
+	stats := smtpctl{}
+	out, err := stats.now()
 
-	for _, i := range metrics {
-		i.create(out)
+	if err != nil {
+		log.Fatal("could not get stats")
+	}
 
-		if i.Available {
-			prometheus.MustRegister(i.Gauge)
+	for _, m := range metrics {
+		m.create(out)
+		log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("created metric")
+
+		if m.Available {
+			prometheus.MustRegister(m.Gauge)
 		}
 	}
 
-	go collect(execTime)
+	go collect(execTime, stats)
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Info(fmt.Sprintf("Beginning to serve on port :%d", *port))
