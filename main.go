@@ -72,12 +72,12 @@ func (m *Metric) value(out string) (int, error) {
 }
 
 type Stat interface {
-	now() (string, error)
+	Now() (string, error)
 }
 
 type smtpctl struct{}
 
-func (s smtpctl) now() (string, error) {
+func (s smtpctl) Now() (string, error) {
 	out, err := exec.Command("smtpctl", "show", "stats").Output()
 	if err != nil {
 		log.Error(err)
@@ -104,7 +104,7 @@ func collect(sleepTime *int) {
 }
 
 func collectValues(stats Stat) error {
-	out, err := stats.now()
+	out, err := stats.Now()
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func collectValues(stats Stat) error {
 	return nil
 }
 
-func init() {
+func create() {
 	for _, m := range metrics {
 		m.Gauge = prometheus.NewGauge(
 			prometheus.GaugeOpts{
@@ -142,6 +142,8 @@ func main() {
 	if *debug {
 		log.SetLevel(log.DebugLevel)
 	}
+
+	create()
 
 	go collect(execTime)
 

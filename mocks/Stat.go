@@ -9,8 +9,8 @@ type Stat struct {
 	mock.Mock
 }
 
-// now provides a mock function with given fields:
-func (_m *Stat) now() (string, error) {
+// Now provides a mock function with given fields:
+func (_m *Stat) Now() (string, error) {
 	ret := _m.Called()
 
 	var r0 string
