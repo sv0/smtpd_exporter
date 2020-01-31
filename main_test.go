@@ -3,11 +3,12 @@ package main
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/xsteadfastx/smtpd-exporter/mocks"
 )
 
 func TestMetricCreate(t *testing.T) {
+	assert := assert.New(t)
 	tables := []struct {
 		out string
 		m   Metric
@@ -41,16 +42,14 @@ func TestMetricCreate(t *testing.T) {
 			Help:  "Shows how often a delivery was ok",
 			Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
 		}
-		if table.m.Name != m.Name || table.m.Help != m.Help || table.m.Regex != m.Regex {
-			t.Errorf("not the same")
-			t.Errorf("'%s' and '%s'", table.m.Name, m.Name)
-			t.Errorf("'%s' and '%s'", table.m.Help, m.Help)
-			t.Errorf("'%s' and '%s'", table.m.Regex, m.Regex)
-		}
+		assert.Equal(table.m.Name, m.Name)
+		assert.Equal(table.m.Help, m.Help)
+		assert.Equal(table.m.Regex, m.Regex)
 	}
 }
 
 func TestMetricValue(t *testing.T) {
+	assert := assert.New(t)
 	tables := []struct {
 		out    string
 		values []int
@@ -77,9 +76,7 @@ func TestMetricValue(t *testing.T) {
 			value, _ := m.value(table.out)
 			values = append(values, value)
 		}
-		if !cmp.Equal(table.values, values) {
-			t.Errorf("%+v is not %+v", table.values, values)
-		}
+		assert.Equal(table.values, values)
 	}
 }
 
