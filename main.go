@@ -19,7 +19,7 @@ import (
 
 var (
 	debug    = flag.Bool("debug", false, "enable debug")
-	interval = flag.Duration("interval", time.Duration(1), "seconds to wait before scraping")
+	interval = flag.Duration("interval", 1*time.Second, "seconds to wait before scraping")
 	port     = flag.Int("port", 8080, "port to listen on")
 )
 
@@ -67,12 +67,6 @@ func (m *Metric) value(out string) (int, error) {
 	}
 
 	return val, nil
-}
-
-// calcValue takes the old storted value and calculates a new one.
-// this should help the fact that the exporter gets restarted from time to time.
-func calcValue(last int, coll int) int {
-	return (last - coll) + last
 }
 
 type Stat interface {
@@ -138,8 +132,6 @@ func create() {
 			},
 		)
 		prometheus.MustRegister(m.Gauge)
-
-		m.LastVal = 0
 	}
 }
 

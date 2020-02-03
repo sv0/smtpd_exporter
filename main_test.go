@@ -4,49 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xsteadfastx/smtpd-exporter/mocks"
+	"github.com/xsteadfastx/smtpd_exporter/mocks"
 )
-
-func TestMetricCreate(t *testing.T) {
-	assert := assert.New(t)
-	tables := []struct {
-		out string
-		m   Metric
-	}{
-		{
-			`bounce.envelope=0
-            scheduler.delivery.ok=5318
-            scheduler.delivery.permfail=972
-            scheduler.delivery.tempfail=4
-            uptime.human=11d19h42m11s`,
-			Metric{
-				Name:  "smtpd_delivery_ok",
-				Help:  "Shows how often a delivery was ok",
-				Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
-			},
-		},
-		{
-			`bounce.envelope=0
-            uptime.human=11d19h42m11s`,
-			Metric{
-				Name:  "smtpd_delivery_ok",
-				Help:  "Shows how often a delivery was ok",
-				Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
-			},
-		},
-	}
-
-	for _, table := range tables {
-		m := Metric{
-			Name:  "smtpd_delivery_ok",
-			Help:  "Shows how often a delivery was ok",
-			Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
-		}
-		assert.Equal(table.m.Name, m.Name)
-		assert.Equal(table.m.Help, m.Help)
-		assert.Equal(table.m.Regex, m.Regex)
-	}
-}
 
 func TestMetricValue(t *testing.T) {
 	assert := assert.New(t)
@@ -66,7 +25,7 @@ func TestMetricValue(t *testing.T) {
 			`bounce.envelope=0
             scheduler.delivery.ok=5318
             uptime.human=11d19h42m11s`,
-			[]int{5318, -1, -1},
+			[]int{5318, 0, 0},
 		},
 	}
 
@@ -90,6 +49,7 @@ func TestCollectValues(t *testing.T) {
 	// init gauge mocks
 	for i, m := range metrics {
 		g := new(mocks.Gauge)
+		// sets expectations on Set method and returns nil
 		g.On("Set", float64(setValues[i])).Return(nil)
 		m.Gauge = g
 	}

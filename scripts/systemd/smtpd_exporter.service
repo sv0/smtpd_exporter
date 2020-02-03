@@ -1,0 +1,9 @@
+[Unit]
+Description=SMTPD Exporter
+
+[Service]
+User=nobody
+ExecStart=/usr/sbin/smtpd_exporter -debug=true -interval 10s
+
+[Install]
+WantedBy=multi-user.target

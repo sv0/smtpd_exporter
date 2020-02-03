@@ -1,4 +1,4 @@
-module github.com/xsteadfastx/smtpd-exporter
+module github.com/xsteadfastx/smtpd_exporter
 
 go 1.13
 
