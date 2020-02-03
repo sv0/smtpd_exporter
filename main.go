@@ -19,7 +19,7 @@ import (
 
 var (
 	debug    = flag.Bool("debug", false, "enable debug")
-	execTime = flag.Int("execTime", 1, "seconds to wait before scraping")
+	interval = flag.Duration("interval", time.Duration(1), "seconds to wait before scraping")
 	port     = flag.Int("port", 8080, "port to listen on")
 )
 
@@ -89,8 +89,7 @@ func (s smtpctl) Now() (string, error) {
 	return string(out), nil
 }
 
-func collect(sleepTime *int) {
-	dur := time.Duration(*sleepTime)
+func collect(interval *time.Duration) {
 	stats := smtpctl{}
 
 	for {
@@ -99,7 +98,7 @@ func collect(sleepTime *int) {
 			log.Error(err)
 		}
 
-		time.Sleep(dur * time.Second)
+		time.Sleep(*interval)
 	}
 }
 
@@ -145,7 +144,7 @@ func main() {
 
 	create()
 
-	go collect(execTime)
+	go collect(interval)
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Info(fmt.Sprintf("Beginning to serve on port :%d", *port))
