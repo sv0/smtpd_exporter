@@ -39,7 +39,6 @@ var metrics = []*Metric{
 	},
 }
 
-// TODO: value (int) to save current value to calculate the new value after daemon restart
 type Metric struct {
 	Name  string
 	Help  string
@@ -48,27 +47,32 @@ type Metric struct {
 }
 
 // value extracts the needed value out of the output of the smtpctl command
-// TODO: dont send -1... send a zero for calculating
 func (m *Metric) value(out string) (int, error) {
 	re, err := regexp.Compile(m.Regex)
 	if err != nil {
-		return -1, fmt.Errorf("could not compile regex: %s", m.Regex)
+		return 0, fmt.Errorf("could not compile regex: %s", m.Regex)
 	}
 
 	match := re.FindStringSubmatch(out)
 	// only go further if at least are two items in slice
 	minMatch := 2
 	if len(match) != minMatch {
-		return -1, fmt.Errorf("could not match regex: %s", m.Regex)
+		return 0, fmt.Errorf("could not match regex: %s", m.Regex)
 	}
 
 	// convert to int
 	val, err := strconv.Atoi(match[1])
 	if err != nil {
-		return -1, fmt.Errorf("could not convert to int: %s", match[1])
+		return 0, fmt.Errorf("could not convert to int: %s", match[1])
 	}
 
 	return val, nil
+}
+
+// calcValue takes the old storted value and calculates a new one.
+// this should help the fact that the exporter gets restarted from time to time.
+func calcValue(last int, coll int) int {
+	return (last - coll) + last
 }
 
 type Stat interface {
@@ -113,8 +117,9 @@ func collectValues(stats Stat) error {
 
 		value, err := m.value(out)
 
+		// just log error but still set gauge to 0
 		if err != nil {
-			log.WithFields(log.Fields{"metric": m}).Error(err)
+			log.WithFields(log.Fields{"metric": m, "error": err}).Debug("could not get value")
 		}
 
 		m.Gauge.Set(float64(value))
@@ -125,6 +130,7 @@ func collectValues(stats Stat) error {
 
 func create() {
 	for _, m := range metrics {
+		// init gauge
 		m.Gauge = prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: m.Name,
@@ -132,6 +138,8 @@ func create() {
 			},
 		)
 		prometheus.MustRegister(m.Gauge)
+
+		m.LastVal = 0
 	}
 }
 
