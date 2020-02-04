@@ -20,11 +20,14 @@ import (
 //go:generate mockery -name Stat
 
 var (
-	Version  = "development"
+	// Version string
+	Version = "development"
+
 	version  = flag.Bool("version", false, "version.")
 	debug    = flag.Bool("debug", false, "enable debug.")
 	interval = flag.Duration("interval", 1*time.Second, "seconds to wait before scraping.")
-	port     = flag.Int("port", 8080, "port to listen on.")
+	port     = flag.Int("port", 9967, "port to listen on.")
+	host     = flag.String("host", "localhost", "host to listen on.")
 )
 
 var metrics = []*Metric{
@@ -43,6 +46,7 @@ var metrics = []*Metric{
 	},
 }
 
+// Metric stores a metric to export and all it needed data.
 type Metric struct {
 	Name  string
 	Help  string
@@ -73,6 +77,7 @@ func (m *Metric) value(out string) (int, error) {
 	return val, nil
 }
 
+// Stat is an interface for getting some stats from a command.
 type Stat interface {
 	Now() (string, error)
 }
@@ -157,5 +162,5 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Info(fmt.Sprintf("Beginning to serve on port :%d", *port))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", *host, *port), nil))
 }
