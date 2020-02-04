@@ -1,0 +1,23 @@
+---
+kind: pipeline
+type: docker
+steps:
+  - name: test
+    image: golang:1.13
+    commands:
+      - go get golang.org/x/lint/golint
+      - make test
+  - name: build
+    image: golang:1.13
+    commands:
+      - go get github.com/mitchellh/gox
+      - make build
+  - name: publish
+    image: plugins/github-release
+    settings:
+      api_key:
+        from_secret: github_token
+      files:
+        - smtpd_exporter_*
+    when:
+      event: tag

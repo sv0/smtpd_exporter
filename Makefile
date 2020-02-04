@@ -1,7 +1,14 @@
-.PHONY: build clean
+.PHONY: build clean test
+
+export GOFLAGS := -mod=vendor
 
 build:
-	CGO_ENABLED=0 gox -mod vendor -ldflags '-extldflags "-static" -X "main.Version=0.0.0"' -os 'linux' -arch 'amd64' -arch '386' .
+	CGO_ENABLED=0 gox -mod vendor -ldflags '-extldflags "-static" -X "main.Version=0.0.0"' .
 
 clean:
 	rm smtpd_exporter_*
+
+test:
+	go test ./...
+	go vet
+	golint -set_exit_status
