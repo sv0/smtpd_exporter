@@ -1,9 +1,11 @@
+// TODO: convert gauges to counters
 package main
 
 import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -18,9 +20,11 @@ import (
 //go:generate mockery -name Stat
 
 var (
-	debug    = flag.Bool("debug", false, "enable debug")
-	interval = flag.Duration("interval", 1*time.Second, "seconds to wait before scraping")
-	port     = flag.Int("port", 8080, "port to listen on")
+	Version  = "development"
+	version  = flag.Bool("version", false, "version.")
+	debug    = flag.Bool("debug", false, "enable debug.")
+	interval = flag.Duration("interval", 1*time.Second, "seconds to wait before scraping.")
+	port     = flag.Int("port", 8080, "port to listen on.")
 )
 
 var metrics = []*Metric{
@@ -137,6 +141,11 @@ func create() {
 
 func main() {
 	flag.Parse()
+
+	if *version {
+		fmt.Printf("%s", Version)
+		os.Exit(0)
+	}
 
 	if *debug {
 		log.SetLevel(log.DebugLevel)
