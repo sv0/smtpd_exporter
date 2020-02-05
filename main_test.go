@@ -40,6 +40,7 @@ func TestMetricValue(t *testing.T) {
 }
 
 func TestCollectValues(t *testing.T) {
+	assert := assert.New(t)
 	setValues := []int{5318, 972, 4}
 	out := `
         scheduler.delivery.ok=5318
@@ -48,14 +49,39 @@ func TestCollectValues(t *testing.T) {
     `
 	// init gauge mocks
 	for i, m := range metrics {
-		g := new(mocks.Gauge)
+		c := new(mocks.Counter)
 		// sets expectations on Set method and returns nil
-		g.On("Set", float64(setValues[i])).Return(nil)
-		m.Gauge = g
+		c.On("Add", float64(setValues[i])).Return(nil)
+		m.Counter = c
+
+		assert.Equal(m.LastVal, 0)
 	}
 	// create stat mock
 	mockStat := new(mocks.Stat)
 	mockStat.On("Now").Return(out, nil)
 
 	collectValues(mockStat)
+
+	for i, m := range metrics {
+		assert.Equal(m.LastVal, setValues[i])
+	}
+}
+
+func TestCalcAddVal(t *testing.T) {
+	assert := assert.New(t)
+	tables := []struct {
+		lastVal  int
+		value    int
+		expected int
+	}{
+		{0, 100, 100},
+		{100, 150, 50},
+	}
+	for _, table := range tables {
+		m := Metric{
+			LastVal: table.lastVal,
+		}
+		assert.Equal(m.calcAddVal(table.value), table.expected)
+	}
+
 }

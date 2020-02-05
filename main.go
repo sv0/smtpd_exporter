@@ -1,4 +1,3 @@
-// TODO: convert gauges to counters
 package main
 
 import (
@@ -9,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,10 +48,13 @@ var metrics = []*Metric{
 
 // Metric stores a metric to export and all it needed data.
 type Metric struct {
-	Name  string
-	Help  string
-	Regex string
-	Gauge prometheus.Gauge
+	Name    string
+	Help    string
+	Regex   string
+	Counter prometheus.Counter
+
+	mux     sync.Mutex
+	LastVal int
 }
 
 // value extracts the needed value out of the output of the smtpctl command
@@ -75,6 +78,24 @@ func (m *Metric) value(out string) (int, error) {
 	}
 
 	return val, nil
+}
+
+func (m *Metric) calcAddVal(value int) int {
+	// this scenario should kick in if smtpd gets restarted and the extracted
+	// value is smaller than the last stored value.
+	// we unregister the counter and create a new one.
+	if value < m.LastVal {
+		prometheus.Unregister(m.Counter)
+		initMetric(m)
+
+		return value
+	}
+
+	if m.LastVal == 0 || value == 0 {
+		return value
+	}
+
+	return (value - m.LastVal)
 }
 
 // Stat is an interface for getting some stats from a command.
@@ -120,29 +141,54 @@ func collectValues(stats Stat) error {
 
 		value, err := m.value(out)
 
-		// just log error but still set gauge to 0
+		// just log error but still set counter to 0
 		if err != nil {
 			log.WithFields(log.Fields{"metric": m, "error": err}).Debug("could not get value")
 		}
 
-		m.Gauge.Set(float64(value))
+		// store last value in struct
+		m.mux.Lock()
+		addVal := m.calcAddVal(value)
+
+		log.WithFields(log.Fields{"metric": m, "add": addVal, "value": value}).Debug("adds value")
+
+		m.Counter.Add(float64(addVal))
+		m.LastVal = value
+		m.mux.Unlock()
 	}
 
 	return nil
 }
 
-func create() {
+// initMetric creates a counter for the metric struct and register it to prometheus.
+func initMetric(m *Metric) {
+	// init counter
+	m.Counter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: m.Name,
+			Help: m.Help,
+		},
+	)
+	prometheus.MustRegister(m.Counter)
+}
+
+func createMetrics() {
 	for _, m := range metrics {
-		// init gauge
-		m.Gauge = prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Name: m.Name,
-				Help: m.Help,
-			},
-		)
-		prometheus.MustRegister(m.Gauge)
+		log.Debugf("%+v", m)
+		initMetric(m)
+		log.Debugf("%+v", m)
 	}
 }
+
+// type Prom interface {
+// 	MustRegister()
+// 	NewCouter()
+// 	CounterOpts()
+// }
+
+// type prom struct {
+// 	p Prom
+// }
 
 func main() {
 	flag.Parse()
@@ -156,7 +202,7 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	create()
+	createMetrics()
 
 	go collect(interval)
 
