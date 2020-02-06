@@ -59,10 +59,12 @@ func TestCollectValues(t *testing.T) {
 		assert.Equal(m.LastVal, 0)
 	}
 	// create stat mock
-	mockStat := new(mocks.Stat)
+	mockStat := new(MockStat)
 	mockStat.On("Now").Return(out, nil)
 
-	collectValues(mockStat)
+	err := collectValues(mockStat)
+
+	assert.Nil(err)
 
 	for i, m := range metrics {
 		assert.Equal(m.LastVal, setValues[i])
@@ -79,24 +81,26 @@ func TestCalcAddVal(t *testing.T) {
 		expected     int
 		unregistered bool
 	}{
-		// {0, 100, 100, false},
-		// {100, 150, 50, false},
+		{0, 100, 100, false},
+		{100, 150, 50, false},
 		{100, 50, 50, true},
 	}
 
 	for _, table := range tables {
 		r := new(mocks.Registerer)
 		c := new(mocks.Counter)
-		m := Metric{
+		i := new(MockInitializer)
+		m := &Metric{
 			LastVal:    table.lastVal,
 			Counter:    c,
 			Registerer: r,
 		}
-		r.On("Unregister", m.Counter).Return(true)
-		r.On("MustRegister", m.Counter).Return(nil)
-		assert.Equal(m.calcAddVal(table.value), table.expected)
+
 		if table.unregistered {
-			r.AssertCalled(t, "Unregister")
+			r.On("Unregister", m.Counter).Return(true)
+			i.On("Metric", m).Return(nil)
 		}
+
+		assert.Equal(m.calcAddVal(table.value, i), table.expected)
 	}
 }

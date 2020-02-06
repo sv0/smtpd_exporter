@@ -17,14 +17,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//go:generate mockery -name Stat
+//go:generate mockery -name Stat -inpkg
+//go:generate mockery -name Initializer -inpkg
+
+const intervalTime = 1
 
 var (
 	// Version default string.
 	Version  = "development"
 	version  = flag.Bool("version", false, "version.")
 	debug    = flag.Bool("debug", false, "enable debug.")
-	interval = flag.Duration("interval", 1*time.Second, "seconds to wait before scraping.")
+	interval = flag.Duration("interval", intervalTime*time.Second, "seconds to wait before scraping.")
 	port     = flag.Int("port", 9967, "port to listen on.")
 	host     = flag.String("host", "localhost", "host to listen on.")
 )
@@ -80,14 +83,14 @@ func (m *Metric) value(out string) (int, error) {
 	return val, nil
 }
 
-func (m *Metric) calcAddVal(value int) int {
+func (m *Metric) calcAddVal(value int, i Initializer) int {
 	// this scenario should kick in if smtpd gets restarted and the extracted
 	// value is smaller than the last stored value.
 	// we unregister the counter and create a new one.
 	if value < m.LastVal {
 		log.Debugf("unregister %+v", m.Name)
 		m.Registerer.Unregister(m.Counter)
-		initMetric(m)
+		i.Metric(m)
 
 		return value
 	}
@@ -124,7 +127,21 @@ type Initializer interface {
 
 type initer struct{}
 
-func (i *initer) Metric(m *Metric) {}
+// Metric creates a counter for the metric struct and register it to prometheus.
+func (i initer) Metric(m *Metric) {
+	// init counter
+	m.Counter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: m.Name,
+			Help: m.Help,
+		},
+	)
+	if m.Registerer == nil {
+		m.Registerer = prometheus.DefaultRegisterer
+	}
+
+	m.Registerer.MustRegister(m.Counter)
+}
 
 func collect(interval *time.Duration) {
 	stats := smtpctl{}
@@ -145,6 +162,8 @@ func collectValues(stats Stat) error {
 		return err
 	}
 
+	i := &initer{}
+
 	for _, m := range metrics {
 		log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("using metric")
 
@@ -157,7 +176,7 @@ func collectValues(stats Stat) error {
 
 		// store last value in struct
 		m.mux.Lock()
-		addVal := m.calcAddVal(value)
+		addVal := m.calcAddVal(value, i)
 
 		log.WithFields(log.Fields{"metric": m, "add": addVal, "value": value}).Debug("adds value")
 
@@ -169,27 +188,13 @@ func collectValues(stats Stat) error {
 	return nil
 }
 
-// initMetric creates a counter for the metric struct and register it to prometheus.
-func initMetric(m *Metric) {
-	// init counter
-	m.Counter = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: m.Name,
-			Help: m.Help,
-		},
-	)
-	if m.Registerer == nil {
-		m.Registerer = prometheus.DefaultRegisterer
-	}
-
-	m.Registerer.MustRegister(m.Counter)
-}
-
 // createMetrics iterates over the metrics and initialize the metrics.
 func createMetrics() {
+	i := initer{}
+
 	for _, m := range metrics {
 		log.Debugf("%+v", m)
-		initMetric(m)
+		i.Metric(m)
 		log.Debugf("%+v", m)
 	}
 }
