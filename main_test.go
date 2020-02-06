@@ -31,10 +31,12 @@ func TestMetricValue(t *testing.T) {
 
 	for _, table := range tables {
 		var values []int
+
 		for _, m := range metrics {
 			value, _ := m.value(table.out)
 			values = append(values, value)
 		}
+
 		assert.Equal(table.values, values)
 	}
 }
@@ -65,23 +67,36 @@ func TestCollectValues(t *testing.T) {
 	for i, m := range metrics {
 		assert.Equal(m.LastVal, setValues[i])
 	}
+
+	mockStat.AssertExpectations(t)
 }
 
 func TestCalcAddVal(t *testing.T) {
 	assert := assert.New(t)
 	tables := []struct {
-		lastVal  int
-		value    int
-		expected int
+		lastVal      int
+		value        int
+		expected     int
+		unregistered bool
 	}{
-		{0, 100, 100},
-		{100, 150, 50},
-	}
-	for _, table := range tables {
-		m := Metric{
-			LastVal: table.lastVal,
-		}
-		assert.Equal(m.calcAddVal(table.value), table.expected)
+		// {0, 100, 100, false},
+		// {100, 150, 50, false},
+		{100, 50, 50, true},
 	}
 
+	for _, table := range tables {
+		r := new(mocks.Registerer)
+		c := new(mocks.Counter)
+		m := Metric{
+			LastVal:    table.lastVal,
+			Counter:    c,
+			Registerer: r,
+		}
+		r.On("Unregister", m.Counter).Return(true)
+		r.On("MustRegister", m.Counter).Return(nil)
+		assert.Equal(m.calcAddVal(table.value), table.expected)
+		if table.unregistered {
+			r.AssertCalled(t, "Unregister")
+		}
+	}
 }

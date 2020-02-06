@@ -20,9 +20,8 @@ import (
 //go:generate mockery -name Stat
 
 var (
-	// Version string
-	Version = "development"
-
+	// Version default string.
+	Version  = "development"
 	version  = flag.Bool("version", false, "version.")
 	debug    = flag.Bool("debug", false, "enable debug.")
 	interval = flag.Duration("interval", 1*time.Second, "seconds to wait before scraping.")
@@ -40,7 +39,7 @@ var metrics = []*Metric{
 		Help:  "Shows how often a delivery permafailed.",
 		Regex: `scheduler\.delivery\.permfail=(?P<number>\d+)`,
 	}, {
-		Name:  "smtd_delivery_tempfail",
+		Name:  "smtpd_delivery_tempfail",
 		Help:  "Shows how often a delivery tempfailed.",
 		Regex: `scheduler\.delivery\.tempfail=(?P<number>\d+)`,
 	},
@@ -48,10 +47,11 @@ var metrics = []*Metric{
 
 // Metric stores a metric to export and all it needed data.
 type Metric struct {
-	Name    string
-	Help    string
-	Regex   string
-	Counter prometheus.Counter
+	Name       string
+	Help       string
+	Regex      string
+	Counter    prometheus.Counter
+	Registerer prometheus.Registerer
 
 	mux     sync.Mutex
 	LastVal int
@@ -85,7 +85,8 @@ func (m *Metric) calcAddVal(value int) int {
 	// value is smaller than the last stored value.
 	// we unregister the counter and create a new one.
 	if value < m.LastVal {
-		prometheus.Unregister(m.Counter)
+		log.Debugf("unregister %+v", m.Name)
+		m.Registerer.Unregister(m.Counter)
 		initMetric(m)
 
 		return value
@@ -116,6 +117,14 @@ func (s smtpctl) Now() (string, error) {
 
 	return string(out), nil
 }
+
+type Initializer interface {
+	Metric(*Metric)
+}
+
+type initer struct{}
+
+func (i *initer) Metric(m *Metric) {}
 
 func collect(interval *time.Duration) {
 	stats := smtpctl{}
@@ -169,9 +178,14 @@ func initMetric(m *Metric) {
 			Help: m.Help,
 		},
 	)
-	prometheus.MustRegister(m.Counter)
+	if m.Registerer == nil {
+		m.Registerer = prometheus.DefaultRegisterer
+	}
+
+	m.Registerer.MustRegister(m.Counter)
 }
 
+// createMetrics iterates over the metrics and initialize the metrics.
 func createMetrics() {
 	for _, m := range metrics {
 		log.Debugf("%+v", m)
@@ -179,16 +193,6 @@ func createMetrics() {
 		log.Debugf("%+v", m)
 	}
 }
-
-// type Prom interface {
-// 	MustRegister()
-// 	NewCouter()
-// 	CounterOpts()
-// }
-
-// type prom struct {
-// 	p Prom
-// }
 
 func main() {
 	flag.Parse()
