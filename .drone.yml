@@ -2,6 +2,13 @@
 kind: pipeline
 type: docker
 steps:
+  - name: lint
+    image: golangci/golangci-lint:v1.23.3
+    commands:
+      - >
+        golangci-lint run
+        --enable-all
+        --disable=gochecknoglobals
   - name: test
     image: golang:1.13
     commands:

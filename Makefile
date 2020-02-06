@@ -1,4 +1,4 @@
-.PHONY: build clean test
+.PHONY: build clean test lint
 
 export GOFLAGS := -mod=vendor
 
@@ -10,5 +10,6 @@ clean:
 
 test:
 	go test ./...
-	go vet
-	golint -set_exit_status
+
+lint:
+	golangci-lint run --enable-all --disable=gochecknoglobals
