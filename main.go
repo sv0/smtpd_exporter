@@ -22,6 +22,7 @@ import (
 
 const intervalTime = 1
 
+// nolint:gochecknoglobals
 var (
 	// Version default string.
 	Version  = "development"
@@ -32,6 +33,7 @@ var (
 	host     = flag.String("host", "localhost", "host to listen on.")
 )
 
+// nolint:gochecknoglobals
 var metrics = []*Metric{
 	{
 		Name:  "smtpd_delivery_ok",
@@ -147,7 +149,7 @@ func collect(interval *time.Duration) {
 	stats := smtpctl{}
 
 	for {
-		err := collectValues(stats)
+		err := collectValues(metrics, stats)
 		if err != nil {
 			log.Error(err)
 		}
@@ -156,7 +158,7 @@ func collect(interval *time.Duration) {
 	}
 }
 
-func collectValues(stats Stat) error {
+func collectValues(m []*Metric, stats Stat) error {
 	out, err := stats.Now()
 	if err != nil {
 		return err
@@ -164,7 +166,7 @@ func collectValues(stats Stat) error {
 
 	i := &initer{}
 
-	for _, m := range metrics {
+	for _, m := range m {
 		log.WithFields(log.Fields{"metric": fmt.Sprintf("%+v", m)}).Debug("using metric")
 
 		value, err := m.value(out)

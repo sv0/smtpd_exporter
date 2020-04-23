@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/xsteadfastx/smtpd_exporter/mocks"
 )
@@ -62,7 +63,7 @@ func TestCollectValues(t *testing.T) {
 	mockStat := new(MockStat)
 	mockStat.On("Now").Return(out, nil)
 
-	err := collectValues(mockStat)
+	err := collectValues(metrics, mockStat)
 
 	assert.Nil(err)
 
@@ -71,6 +72,30 @@ func TestCollectValues(t *testing.T) {
 	}
 
 	mockStat.AssertExpectations(t)
+}
+
+// TestCollectValueZero tries to reproduce a bug of
+// not setting the counter.
+func TestCollectValuesZero(t *testing.T) {
+	assert := assert.New(t)
+	mockStat := new(MockStat)
+	m := &Metric{
+		Name:  "testmetric",
+		Help:  "just a test",
+		Regex: `scheduler\.delivery\.ok=(?P<number>\d+)`,
+	}
+	i := initer{}
+	i.Metric(m)
+	metrics := []*Metric{m}
+	out := `
+        scheduler.delivery.ok=5318
+        scheduler.delivery.permfail=972
+        scheduler.delivery.tempfail=4
+    `
+	mockStat.On("Now").Return(out, nil)
+	err := collectValues(metrics, mockStat)
+	assert.Nil(err)
+	assert.Equal(float64(5318), testutil.ToFloat64(metrics[0].Counter))
 }
 
 func TestCalcAddVal(t *testing.T) {
