@@ -2,7 +2,7 @@
 Description=SMTPD Exporter
 
 [Service]
-User=nobody
+User=root
 ExecStart=/usr/local/bin/smtpd_exporter -debug=true -interval 10s -host 0.0.0.0
 
 [Install]
