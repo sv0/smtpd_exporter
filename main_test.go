@@ -95,7 +95,7 @@ func TestCollectValuesZero(t *testing.T) {
 	mockStat.On("Now").Return(out, nil)
 	err := collectValues(metrics, mockStat)
 	assert.Nil(err)
-	assert.Equal(float64(5318), testutil.ToFloat64(metrics[0].Counter))
+	assert.Equal(float64(5318), testutil.ToFloat64(metrics[0].Counter)) //nolint:gomnd
 }
 
 func TestCalcAddVal(t *testing.T) {
