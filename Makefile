@@ -10,7 +10,7 @@ test:
 	GOFLAGS=-mod=vendor go test ./...
 
 lint:
-	golangci-lint run --enable-all --disable=gochecknoglobals
+	golangci-lint run --enable-all --disable=gochecknoglobals,testpackage
 
 dep-update:
 	go get -u ./...

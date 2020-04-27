@@ -62,7 +62,7 @@ type Metric struct {
 	LastVal int
 }
 
-// value extracts the needed value out of the output of the smtpctl command
+// value extracts the needed value out of the output of the smtpctl command.
 func (m *Metric) value(out string) (int, error) {
 	re, err := regexp.Compile(m.Regex)
 	if err != nil {
