@@ -47,6 +47,10 @@ var metrics = []*Metric{
 		Name:  "smtpd_delivery_tempfail",
 		Help:  "Shows how often a delivery tempfailed.",
 		Regex: `scheduler\.delivery\.tempfail=(?P<number>\d+)`,
+	}, {
+		Name:  "smtpd_queue",
+		Help:  "Shows how much messages are in queue.",
+		Regex: `scheduler\.ramqueue\.message=(?P<number>\d+)`,
 	},
 }
 
